@@ -1,29 +1,39 @@
-name: Build iOS
+name: Build iOS IPA
 
 on:
   push:
-    branches: [ develop, main ]
-  pull_request:
-    branches: [ develop ]
+    branches:
+      - beta
+      - stable
+      - internal
 
 jobs:
   build:
     runs-on: macos-latest
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          # Updated to 3.24.0 for better compatibility with macOS 15/Xcode 16
-          flutter-version: 'any'
-          channel: 'stable'
-          cache: true
-
+          channel: stable
+      
       - name: Get dependencies
         run: flutter pub get
-
-      - name: Build iOS
-        run: flutter build ios --release --no-codesign
+      
+      - name: Install ObjectBox dependencies
+        run: bash <(curl -s https://raw.githubusercontent.com/objectbox/objectbox-dart/main/install.sh)
+      
+      - name: Run tests
+        run: flutter test
+      
+      - name: Build IPA
+        run: flutter build ipa --release --no-codesign
+      
+      - name: Upload IPA to artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Flow-IPA
+          path: build/ios/ipa/*.ipa
+          retention-days: 30
