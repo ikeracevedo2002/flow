@@ -18,7 +18,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           # Updated to 3.24.0 for better compatibility with macOS 15/Xcode 16
-          flutter-version: '3.24.0'
+          flutter-version: 'any'
           channel: 'stable'
           cache: true
 
