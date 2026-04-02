@@ -98,9 +98,6 @@ flutter:
     generate: true
     uses-material-design: true
 
-    config:
-        disable-swift-package-manager: true
-
     assets:
         - assets/
         - assets/fonts/
