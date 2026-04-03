@@ -41,50 +41,74 @@ struct TwoEntryWidgetView: View {
         "transfer": "Transfer",
         "income": "Income",
         "expense": "Expense",
-        "eny": "Camera"
+        "voice": "Mic",
+        "photo": "Camera"
     ]
 
     var body: some View {
         GeometryReader { geometry in
             let size = (geometry.size.height - 40) * 0.5
 
-            if (entry.order.count == 2) {
-                VStack(spacing: TwoEntryWidgetView.spacing) {
-                    button(
-                        type: entry.order[0],
-                        size: size,
-                        pill: true
-                    )
-                    button(
-                        type: entry.order[1],
-                        size: size,
-                        pill: true
-                    )
-                }
-            }
+            // if (entry.order.count == 2) {
+            //     VStack(spacing: TwoEntryWidgetView.spacing) {
+            //         button(
+            //             type: entry.order[0],
+            //             size: size,
+            //             pill: true
+            //         )
+            //         button(
+            //             type: entry.order[1],
+            //             size: size,
+            //             pill: true
+            //         )
+            //     }
+            // }
 
-            if (entry.order.count == 3) {
-                VStack(alignment: .center, spacing: TwoEntryWidgetView.spacing) {
-                    button(
-                        type: entry.order[0],
-                        size: size,
-                        pill: true
-                    )
-                    HStack(spacing: TwoEntryWidgetView.spacing) {
-                        button(
-                            type: entry.order[1],
-                            size: size
-                        )
-                        button(
-                            type: entry.order[2],
-                            size: size
-                        )
-                    }
-                }
-            }
+            // if (entry.order.count == 3) {
+            //     VStack(alignment: .center, spacing: TwoEntryWidgetView.spacing) {
+            //         button(
+            //             type: entry.order[0],
+            //             size: size,
+            //             pill: true
+            //         )
+            //         HStack(spacing: TwoEntryWidgetView.spacing) {
+            //             button(
+            //                 type: entry.order[1],
+            //                 size: size
+            //             )
+            //             button(
+            //                 type: entry.order[2],
+            //                 size: size
+            //             )
+            //         }
+            //     }
+            // }
 
-            if (entry.order.count == 4) {
-                VStack(alignment: .center, spacing: TwoEntryWidgetView.spacing) {
+            // if (entry.order.count == 4) {
+            //     VStack(alignment: .center, spacing: TwoEntryWidgetView.spacing) {
+            //         HStack(spacing: TwoEntryWidgetView.spacing) {
+            //             button(
+            //                 type: entry.order[0],
+            //                 size: size
+            //             )
+            //             button(
+            //                 type: entry.order[1],
+            //                 size: size
+            //             )
+            //         }
+            //         HStack(spacing: TwoEntryWidgetView.spacing) {
+            //             button(
+            //                 type: entry.order[2],
+            //                 size: size
+            //             )
+            //             button(
+            //                 type: entry.order[3],
+            //                 size: size
+            //             )
+            //         }
+            //     }
+            // }
+            VStack(alignment: .center, spacing: TwoEntryWidgetView.spacing) {
                     HStack(spacing: TwoEntryWidgetView.spacing) {
                         button(
                             type: entry.order[0],
@@ -106,13 +130,22 @@ struct TwoEntryWidgetView: View {
                         )
                     }
                 }
-            }
         }
     }
 
     @ViewBuilder
     func button(type: String, size: Double, pill: Bool = false) -> some View {
-        Link(destination: URL(string: "flow-mn:///transaction/new?type=\(type)")!) {
+        let destination = String
+        switch type {
+            case "voice":
+                destination = "flow-mn:///transaction/voice"
+            case "photo":
+                destination = "flow-mn:///transaction/photo"
+            default:
+                destination = "flow-mn:///transaction/new?type=\(type)"
+        }
+
+        Link(destination: URL(string: destination)!) {
             if (pill) {
                 Capsule()
                 .fill(.tertiary)
