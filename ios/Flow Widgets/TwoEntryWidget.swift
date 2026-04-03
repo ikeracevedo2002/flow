@@ -74,26 +74,28 @@ struct TwoEntryWidgetView: View {
         }
     }
 
+    func destination(for type: String) -> URL {
+        let urlString: String
+        switch type {
+        case "voice":
+            urlString = "flow-mn:///transaction/voice"
+        case "photo":
+            urlString = "flow-mn:///transaction/photo"
+        default:
+            urlString = "flow-mn:///transaction/new?type=\(type)"
+        }
+        return URL(string: urlString)!
+    }
+
     @ViewBuilder
     func button(type: String, size: Double, pill: Bool = false) -> some View {
-        // Fix 1: was `let destination = String` — must be `var destination: String`
-        var destination: String
-        switch type {
-            case "voice":
-                destination = "flow-mn:///transaction/voice"
-            case "photo":
-                destination = "flow-mn:///transaction/photo"
-            default:
-                destination = "flow-mn:///transaction/new?type=\(type)"
-        }
-
-        Link(destination: URL(string: destination)!) {
+        Link(destination: destination(for: type)) {
             if (pill) {
                 Capsule()
                 .fill(.tertiary)
                 .overlay{
                     // Fix 2: was entry.order[0] — should be `type` to use the current button's type
-                    Image(TwoEntryWidgetView.images[entry.order[0]]!)
+                    Image(TwoEntryWidgetView.images[type]!)
                         .resizable()
                         .foregroundStyle(.primary)
                         .frame(
@@ -104,7 +106,7 @@ struct TwoEntryWidgetView: View {
                 Circle()
                 .fill(.tertiary)
                 .overlay {
-                    Image(TwoEntryWidgetView.images[entry.order[0]]!)
+                    Image(TwoEntryWidgetView.images[type]!)
                         .resizable()
                         .foregroundStyle(.primary)
                         .frame(
