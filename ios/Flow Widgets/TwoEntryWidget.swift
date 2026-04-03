@@ -49,65 +49,6 @@ struct TwoEntryWidgetView: View {
         GeometryReader { geometry in
             let size = (geometry.size.height - 40) * 0.5
 
-            // if (entry.order.count == 2) {
-            //     VStack(spacing: TwoEntryWidgetView.spacing) {
-            //         button(
-            //             type: entry.order[0],
-            //             size: size,
-            //             pill: true
-            //         )
-            //         button(
-            //             type: entry.order[1],
-            //             size: size,
-            //             pill: true
-            //         )
-            //     }
-            // }
-
-            // if (entry.order.count == 3) {
-            //     VStack(alignment: .center, spacing: TwoEntryWidgetView.spacing) {
-            //         button(
-            //             type: entry.order[0],
-            //             size: size,
-            //             pill: true
-            //         )
-            //         HStack(spacing: TwoEntryWidgetView.spacing) {
-            //             button(
-            //                 type: entry.order[1],
-            //                 size: size
-            //             )
-            //             button(
-            //                 type: entry.order[2],
-            //                 size: size
-            //             )
-            //         }
-            //     }
-            // }
-
-            // if (entry.order.count == 4) {
-            //     VStack(alignment: .center, spacing: TwoEntryWidgetView.spacing) {
-            //         HStack(spacing: TwoEntryWidgetView.spacing) {
-            //             button(
-            //                 type: entry.order[0],
-            //                 size: size
-            //             )
-            //             button(
-            //                 type: entry.order[1],
-            //                 size: size
-            //             )
-            //         }
-            //         HStack(spacing: TwoEntryWidgetView.spacing) {
-            //             button(
-            //                 type: entry.order[2],
-            //                 size: size
-            //             )
-            //             button(
-            //                 type: entry.order[3],
-            //                 size: size
-            //             )
-            //         }
-            //     }
-            // }
             VStack(alignment: .center, spacing: TwoEntryWidgetView.spacing) {
                     HStack(spacing: TwoEntryWidgetView.spacing) {
                         button(
@@ -135,7 +76,8 @@ struct TwoEntryWidgetView: View {
 
     @ViewBuilder
     func button(type: String, size: Double, pill: Bool = false) -> some View {
-        let destination = String
+        // Fix 1: was `let destination = String` — must be `var destination: String`
+        var destination: String
         switch type {
             case "voice":
                 destination = "flow-mn:///transaction/voice"
@@ -150,6 +92,7 @@ struct TwoEntryWidgetView: View {
                 Capsule()
                 .fill(.tertiary)
                 .overlay{
+                    // Fix 2: was entry.order[0] — should be `type` to use the current button's type
                     Image(TwoEntryWidgetView.images[entry.order[0]]!)
                         .resizable()
                         .foregroundStyle(.primary)
@@ -161,7 +104,7 @@ struct TwoEntryWidgetView: View {
                 Circle()
                 .fill(.tertiary)
                 .overlay {
-                    Image(TwoEntryWidgetView.images[type]!)
+                    Image(TwoEntryWidgetView.images[entry.order[0]]!)
                         .resizable()
                         .foregroundStyle(.primary)
                         .frame(
