@@ -63,8 +63,10 @@ class ButtonOrderPreferencesPageState
                 child: SizedBox(
                   width: size.width,
                   height: size.height,
+
                   child: Stack(
                     alignment: .center,
+                    clipBehavior: .none,
                     children: [
                       for (int i = 0; i < count; i++)
                         _buildDropZone(
@@ -278,7 +280,7 @@ class ButtonOrderPreferencesPageState
 
       UserPreferencesService().transactionButtonOrder = copiedOrder;
     } catch (e) {
-      log("An error was occured while swapping transaction button order: $e");
+      log("An error was occurred while swapping transaction button order: $e");
     } finally {
       busy = false;
 

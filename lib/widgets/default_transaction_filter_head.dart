@@ -32,7 +32,7 @@ import "package:flow/widgets/transaction_filter_head/transaction_filter_chip.dar
 import "package:flow/widgets/transaction_filter_head/transaction_search_sheet.dart";
 import "package:flutter/material.dart";
 import "package:flutter/scheduler.dart";
-import "package:material_symbols_icons/symbols.dart";
+import "package:material_symbols_icons_flow/symbols.dart";
 
 class DefaultTransactionsFilterHead extends StatefulWidget {
   final TransactionFilter current;
@@ -291,13 +291,16 @@ class _DefaultTransactionsFilterHeadState
         StringMultiFilter.whitelist(
           accountsList.map((account) => account.uuid).toList(),
         ),
+      List<Account>() => StringMultiFilter.keepEverything(),
       _ => null,
     };
 
     if (accountsFilterOverride != null) {
       setState(() {
         filter = filter.copyWithOptional(
-          accounts: Optional(accountsFilterOverride),
+          accounts: accountsFilterOverride == StringMultiFilter.keepEverything()
+              ? Optional(null)
+              : Optional(accountsFilterOverride),
         );
       });
     }

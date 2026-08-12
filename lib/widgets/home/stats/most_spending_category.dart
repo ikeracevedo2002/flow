@@ -16,7 +16,7 @@ import "package:flow/widgets/general/money_text.dart";
 import "package:flow/widgets/general/surface.dart";
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
-import "package:material_symbols_icons/symbols.dart";
+import "package:material_symbols_icons_flow/symbols.dart";
 import "package:moment_dart/moment_dart.dart";
 
 class MostSpendingCategory extends StatefulWidget {
@@ -47,6 +47,13 @@ class _MostSpendingCategoryState extends State<MostSpendingCategory> {
     super.initState();
     range = widget.range;
     fetch();
+    UserPreferencesService().valueNotifier.addListener(fetch);
+  }
+
+  @override
+  void dispose() {
+    UserPreferencesService().valueNotifier.removeListener(fetch);
+    super.dispose();
   }
 
   @override

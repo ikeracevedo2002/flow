@@ -5,9 +5,9 @@ import "package:flow/widgets/general/modal_overflow_bar.dart";
 import "package:flow/widgets/general/modal_sheet.dart";
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
-import "package:material_symbols_icons/symbols.dart";
+import "package:material_symbols_icons_flow/symbols.dart";
 
-/// Pops with [IconFlowIcon] or [null]
+/// Pops with [IconFlowIcon], [SimpleIconFlowIcon], or [null]
 class SelectIconFlowIconSheet extends StatefulWidget {
   final FlowIconData? initialValue;
 
@@ -24,15 +24,17 @@ class _SelectIconFlowIconSheetState extends State<SelectIconFlowIconSheet>
 
   String _query = "";
 
-  IconFlowIcon? value;
+  FlowIconData? value;
 
   @override
   void initState() {
     super.initState();
 
-    value = widget.initialValue is IconFlowIcon
-        ? widget.initialValue as IconFlowIcon
-        : null;
+    value = switch (widget.initialValue) {
+      IconFlowIcon icon => icon,
+      SimpleIconFlowIcon icon => icon,
+      _ => null,
+    };
 
     _controller = TabController(length: 2, vsync: this);
   }
@@ -45,7 +47,9 @@ class _SelectIconFlowIconSheetState extends State<SelectIconFlowIconSheet>
 
   @override
   Widget build(BuildContext context) {
-    final List<IconData> simpleIconsResult = querySimpleIcons(_query);
+    final List<MapEntry<String, IconData>> simpleIconsResult = querySimpleIcons(
+      _query,
+    );
     final List<IconData> materialSymbolsResult = queryMaterialSymbols(_query);
 
     return ModalSheet.scrollable(
@@ -88,22 +92,38 @@ class _SelectIconFlowIconSheetState extends State<SelectIconFlowIconSheet>
         controller: _controller,
         children: [
           GridView.builder(
-            itemBuilder: (context, index) => IconButton(
-              onPressed: () => updateIcon(simpleIconsResult[index]),
-              icon: Icon(simpleIconsResult[index]),
-              iconSize: 48.0,
-            ),
+            itemBuilder: (context, index) {
+              final bool selected =
+                  value is IconFlowIcon &&
+                  (value as IconFlowIcon).iconData ==
+                      simpleIconsResult[index].value;
+
+              return IconButton(
+                onPressed: () => updateSimpleIcon(simpleIconsResult[index].key),
+                icon: Icon(simpleIconsResult[index].value),
+                iconSize: 48.0,
+                isSelected: selected,
+              );
+            },
             itemCount: simpleIconsResult.length,
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 72.0,
             ),
           ),
           GridView.builder(
-            itemBuilder: (context, index) => IconButton(
-              onPressed: () => updateIcon(materialSymbolsResult[index]),
-              icon: Icon(materialSymbolsResult[index]),
-              iconSize: 48.0,
-            ),
+            itemBuilder: (context, index) {
+              final bool selected =
+                  value is IconFlowIcon &&
+                  (value as IconFlowIcon).iconData ==
+                      materialSymbolsResult[index];
+
+              return IconButton(
+                onPressed: () => updateIcon(materialSymbolsResult[index]),
+                icon: Icon(materialSymbolsResult[index]),
+                iconSize: 48.0,
+                isSelected: selected,
+              );
+            },
             itemCount: materialSymbolsResult.length,
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 72.0,
@@ -124,6 +144,11 @@ class _SelectIconFlowIconSheetState extends State<SelectIconFlowIconSheet>
 
   void updateIcon(IconData iconData) {
     value = IconFlowIcon(iconData);
+    setState(() {});
+  }
+
+  void updateSimpleIcon(String slug) {
+    value = SimpleIconFlowIcon(slug);
     setState(() {});
   }
 }

@@ -136,16 +136,24 @@ extension MainActions on ObjectBox {
     return accounts;
   }
 
-  List<Category> getCategories([bool sortByFrecency = true]) {
+  List<Category> getCategories({
+    bool sortByFrecency = true,
+    TransactionType? type,
+  }) {
     final List<Category> categories = box<Category>().getAll();
 
     if (sortByFrecency) {
+      final List<String> frecencyKeys =
+          TransitiveLocalPreferences.categoryFrecencyTypesFor(type);
+
       final FrecencyGroup frecencyGroup = FrecencyGroup(
         categories
-            .map(
-              (category) => TransitiveLocalPreferences().getFrecencyData(
-                "category",
-                category.uuid,
+            .expand(
+              (category) => frecencyKeys.map(
+                (key) => TransitiveLocalPreferences().getFrecencyData(
+                  key,
+                  category.uuid,
+                ),
               ),
             )
             .nonNulls
@@ -243,7 +251,16 @@ extension MainActions on ObjectBox {
       final K? associatedData = associateBy?.call(transaction);
 
       flow[key] ??= MultiCurrencyFlow<K>(associatedData: associatedData);
-      flow[key]!.add(transaction.money);
+
+      // A single transaction with an invalid/unsupported currency code makes
+      // [Transaction.money] (and [MultiCurrencyFlow.add]) throw. Skip just that
+      // transaction instead of aborting the entire aggregation, which would
+      // otherwise leave every consumer of this grouping with empty results.
+      try {
+        flow[key]!.add(transaction.money);
+      } catch (_) {
+        continue;
+      }
     }
 
     return flow;
@@ -1120,9 +1137,20 @@ extension AccountActions on Account {
             }),
       );
       if (category != null) {
+        final TransactionType resolvedType = value.type;
+        final String categoryFrecencyKey = switch (resolvedType) {
+          TransactionType.income || TransactionType.expense =>
+            TransitiveLocalPreferences.categoryFrecencyType(resolvedType),
+          // Transfers don't carry a category in normal flows, so this branch
+          // is a safety fallback — bucket it with expenses.
+          TransactionType.transfer =>
+            TransitiveLocalPreferences.categoryFrecencyType(
+              TransactionType.expense,
+            ),
+        };
         unawaited(
           TransitiveLocalPreferences()
-              .updateFrecencyData("category", category.uuid)
+              .updateFrecencyData(categoryFrecencyKey, category.uuid)
               .then((_) {})
               .catchError((e, stackTrace) {
                 _log.warning(

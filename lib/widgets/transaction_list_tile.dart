@@ -17,7 +17,7 @@ import "package:flow/widgets/transaction_list_tile_theme.dart";
 import "package:flutter/material.dart";
 import "package:flutter_slidable/flutter_slidable.dart";
 import "package:go_router/go_router.dart";
-import "package:material_symbols_icons/symbols.dart";
+import "package:material_symbols_icons_flow/symbols.dart";
 import "package:moment_dart/moment_dart.dart";
 
 class TransactionListTile extends StatelessWidget {
@@ -47,6 +47,21 @@ class TransactionListTile extends StatelessWidget {
   /// Defaults to [TransactionGroupRange.day]
   final TransactionGroupRange? groupRange;
 
+  /// When true, the list is in selection mode. Tapping the row toggles
+  /// selection instead of navigating, and slidable actions are suppressed.
+  final bool selectionActive;
+
+  /// Whether this transaction is currently in the selection set.
+  final bool selected;
+
+  /// Called when the user taps to toggle selection. When non-null, tapping
+  /// the leading icon always toggles regardless of [selectionActive].
+  final VoidCallback? onSelectionToggle;
+
+  /// Renders an eye badge on the leading icon to mark the row as a read-only
+  /// preview — e.g. projected recurring occurrences that aren't real entries.
+  final bool preview;
+
   const TransactionListTile({
     super.key,
     required this.transaction,
@@ -59,6 +74,10 @@ class TransactionListTile extends StatelessWidget {
     this.dismissibleKey,
     this.overrideObscure,
     this.theme,
+    this.selectionActive = false,
+    this.selected = false,
+    this.onSelectionToggle,
+    this.preview = false,
   });
 
   @override
@@ -68,14 +87,15 @@ class TransactionListTile extends StatelessWidget {
         theme ??
         TransactionListTileThemeData.fallback;
 
-    final bool showPendingConfirmation =
-        confirmFn != null && transaction.confirmable();
+    final bool isLivePending =
+        transaction.isPending == true && transaction.isDeleted != true;
+
+    final bool showPendingConfirmation = confirmFn != null && isLivePending;
 
     final bool showDuplicateButton =
         transaction.isDeleted != true && duplicateFn != null;
     final bool showHoldButton = confirmFn != null && transaction.holdable();
-    final bool showConfirmButton =
-        confirmFn != null && transaction.confirmable();
+    final bool showConfirmButton = confirmFn != null && isLivePending;
 
     if ((combineTransfers || showPendingConfirmation) &&
         transaction.isTransfer &&
@@ -154,11 +174,29 @@ class TransactionListTile extends StatelessWidget {
                 )
               : null);
 
+    final Widget visualLeading = selected
+        ? FlowIcon(FlowIconData.icon(Symbols.check_rounded), plated: true)
+        : preview
+        ? _previewBadged(context, buildLeading(context, effectiveTheme))
+        : buildLeading(context, effectiveTheme);
+
+    final Widget leading = onSelectionToggle != null
+        ? GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onSelectionToggle!(),
+            child: visualLeading,
+          )
+        : visualLeading;
+
     final Widget listTile = Material(
       type: MaterialType.card,
-      color: kTransparent,
+      color: selected
+          ? context.colorScheme.primary.withAlpha(0x20)
+          : kTransparent,
       child: InkWell(
-        onTap: () => context.push("/transaction/${transaction.id}"),
+        onTap: selectionActive
+            ? (onSelectionToggle ?? () {})
+            : () => context.push("/transaction/${transaction.id}"),
         child: Padding(
           padding: effectiveTheme.paddingOrDefault,
           child: Column(
@@ -167,7 +205,7 @@ class TransactionListTile extends StatelessWidget {
                 crossAxisAlignment: .start,
                 spacing: effectiveTheme.spacingOrDefault,
                 children: [
-                  buildLeading(context, effectiveTheme),
+                  leading,
                   Expanded(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -301,6 +339,10 @@ class TransactionListTile extends StatelessWidget {
         ),
     ];
 
+    if (selectionActive) {
+      return KeyedSubtree(key: dismissibleKey, child: listTile);
+    }
+
     return DirectionalSlidable(
       key: dismissibleKey,
       groupTag: "transaction_list_tile",
@@ -340,6 +382,37 @@ class TransactionListTile extends StatelessWidget {
     );
   }
 
+  /// Overlays a small eye badge on the bottom-right of a leading [icon] to flag
+  /// the row as a non-editable preview. There's no shared badge component in the
+  /// app, so this is a deliberate one-off.
+  Widget _previewBadged(BuildContext context, Widget icon) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        icon,
+        Positioned(
+          right: -1.0,
+          bottom: -1.0,
+          child: DecoratedBox(
+            // A surface-colored ring separates the badge from the icon plate.
+            decoration: BoxDecoration(
+              color: context.colorScheme.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(2.0),
+              child: Icon(
+                Symbols.visibility_rounded,
+                size: 12.0,
+                color: context.flowColors.semi,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   String get dateString {
     final DateTime now = Moment.now().startOfNextMinute();
 
@@ -370,3 +443,4 @@ class TransactionListTile extends StatelessWidget {
     ),
   );
 }
+

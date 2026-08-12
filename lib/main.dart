@@ -34,6 +34,7 @@ import "package:flow/providers/transaction_tags_provider.dart";
 import "package:flow/routes.dart";
 import "package:flow/services/currency_registry.dart";
 import "package:flow/services/exchange_rates.dart";
+import "package:flow/services/in_app_purchase.dart";
 import "package:flow/services/integrations/siri_pending.dart";
 import "package:flow/services/local_auth.dart";
 import "package:flow/services/navigation.dart";
@@ -42,6 +43,7 @@ import "package:flow/services/recurring_transactions.dart";
 import "package:flow/services/sync.dart";
 import "package:flow/services/transactions.dart";
 import "package:flow/services/user_preferences.dart";
+import "package:flow/services/widget_summary_sync.dart";
 import "package:flow/theme/color_themes/registry.dart";
 import "package:flow/theme/flow_color_scheme.dart";
 import "package:flow/theme/theme.dart";
@@ -55,7 +57,7 @@ import "package:flutter_quill/flutter_quill.dart";
 import "package:intl/intl.dart";
 import "package:logging/logging.dart";
 import "package:logging_appenders/logging_appenders.dart";
-import "package:material_symbols_icons/material_symbols_icons.dart";
+import "package:material_symbols_icons_flow/material_symbols_icons.dart";
 import "package:moment_dart/moment_dart.dart";
 import "package:package_info_plus/package_info_plus.dart";
 import "package:path/path.dart" as path;
@@ -110,7 +112,10 @@ void main() async {
   await ObjectBox().updateAccountOrderList(ignoreIfNoUnsetValue: true);
   startupLog.fine("Updating account order list");
 
-  initializeNotifications();
+  // Await so the plugin is ready before TransactionsService listeners can
+  // fire (FlowState.initState wires _synchronizePlannedNotifications), which
+  // otherwise hits NotificationsService.pluginInstance before it's set.
+  await initializeNotifications();
 
   startupLog.fine("Clearing stale transactions from trash bin");
   unawaited(
@@ -123,6 +128,15 @@ void main() async {
   ExchangeRatesService().init();
 
   CurrencyRegistryService();
+
+  if (Platform.isIOS) {
+    startupLog.fine("Initializing TipService");
+    unawaited(
+      TipService().init().catchError((error) {
+        startupLog.warning("Failed to initialize TipService", error);
+      }),
+    );
+  }
 
   try {
     startupLog.fine("Initializing user preferences service");
@@ -138,16 +152,12 @@ void main() async {
     startupLog.severe("Failed to initialize SyncService", e, stackTrace);
   }
 
-  try {
-    startupLog.fine("Initializing RecurringTransactionsService");
-    RecurringTransactionsService();
-  } catch (e, stackTrace) {
-    startupLog.severe(
-      "Failed to initialize RecurringTransactionsService",
-      e,
-      stackTrace,
-    );
-  }
+  // RecurringTransactionsService is intentionally NOT instantiated here.
+  // Eager construction used to run _synchronizeAll() in the constructor,
+  // racing with first-frame work. The first sync is now triggered from
+  // FlowState.initState's post-frame callback (alongside migrations).
+
+  TransactionsService().addListener(() => WidgetSummarySync.sync());
 
   try {
     Moment.minValue = DateTime(0);
@@ -155,7 +165,7 @@ void main() async {
     Moment.minValueUtc = DateTime.utc(0);
     Moment.maxValueUtc = DateTime.utc(4000);
   } catch (e) {
-    // Silent fail
+    startupLog.warning("Failed to set Moment min/max values", e);
   }
 
   startupLog.fine("Finally telling Flutter to run the app widget");
@@ -190,6 +200,15 @@ class FlowState extends State<Flow> {
 
   ShakeDetector? detector;
 
+  /// Debounces `_synchronizePlannedNotifications` so a burst of
+  /// `TransactionsService` updates (recurring catch-up, bulk import, etc.)
+  /// coalesces into one `synchronizeNotifications` call instead of N
+  /// overlapping `clearByType + reschedule` cycles that fight each other.
+  Timer? _notificationsSyncDebounce;
+  static const Duration _notificationsSyncDebounceWindow = Duration(
+    milliseconds: 250,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -199,6 +218,9 @@ class FlowState extends State<Flow> {
 
     UserPreferencesService().valueNotifier.addListener(_reloadTheme);
     UserPreferencesService().valueNotifier.addListener(_listenToShakes);
+    UserPreferencesService().valueNotifier.addListener(_syncWidgets);
+
+    ExchangeRatesService().exchangeRatesCache.addListener(_syncWidgets);
 
     LocalPreferences().localeOverride.addListener(_reloadLocale);
     LocalPreferences().primaryCurrency.addListener(_refreshExchangeRates);
@@ -213,10 +235,29 @@ class FlowState extends State<Flow> {
 
     SchedulerBinding.instance.addPostFrameCallback((_) {
       migrateRemoveTitleFromUntitledTransactions();
-      migrateExtraKeyIndexing();
       migratePrimaryCurrencyToDb();
       migrateThemePrefsToDb();
       migratePrivacyPreferencesToUserPreferences();
+      migrateHomePendingTransactionsRange();
+      unawaited(migrateSimpleIconsToSlug());
+
+      // Geo migration queries `extraTag: "hasExtension:..."`, which is only
+      // populated by the extra-key indexing migration. Chain them so geo
+      // doesn't run before its data dependency.
+      unawaited(
+        migrateExtraKeyIndexing().then((_) => migrateGeoExtensionToLocation()),
+      );
+
+      // First recurring-transactions sync; deferred to here so it doesn't
+      // compete with startup work or first-frame rendering.
+      unawaited(
+        RecurringTransactionsService().synchronizeAll().catchError((error) {
+          mainLogger.severe(
+            "First recurring-transactions sync failed",
+            error,
+          );
+        }),
+      );
 
       unawaited(SiriPendingService().resolveSiriTransactions());
     });
@@ -251,8 +292,12 @@ class FlowState extends State<Flow> {
     LocalPreferences().primaryCurrency.removeListener(_refreshExchangeRates);
     UserPreferencesService().valueNotifier.removeListener(_reloadTheme);
     UserPreferencesService().valueNotifier.removeListener(_listenToShakes);
+    UserPreferencesService().valueNotifier.removeListener(_syncWidgets);
+
+    ExchangeRatesService().exchangeRatesCache.removeListener(_syncWidgets);
 
     TransactionsService().removeListener(_synchronizePlannedNotifications);
+    _notificationsSyncDebounce?.cancel();
 
     _appLifeCycleListener.dispose();
 
@@ -426,9 +471,16 @@ class FlowState extends State<Flow> {
     );
   }
 
+  void _syncWidgets() {
+    WidgetSummarySync.sync();
+  }
+
   void _synchronizePlannedNotifications() {
-    TransactionsService().synchronizeNotifications().catchError((error) {
-      startupLog.severe("Failed to synchronize notifications", error);
+    _notificationsSyncDebounce?.cancel();
+    _notificationsSyncDebounce = Timer(_notificationsSyncDebounceWindow, () {
+      TransactionsService().synchronizeNotifications().catchError((error) {
+        startupLog.severe("Failed to synchronize notifications", error);
+      });
     });
   }
 
@@ -500,11 +552,11 @@ void initializePackageVersion() async {
     startupLog.fine("App version: $appVersion");
     startupLog.fine("Store: ${value.installerStore}");
   } catch (e) {
-    startupLog.warning("An error was occured while fetching app version", e);
+    startupLog.warning("An error was occurred while fetching app version", e);
   }
 }
 
-void initializeNotifications() async {
+Future<void> initializeNotifications() async {
   assert(LocalPreferences().runtimeType == LocalPreferences);
 
   await NotificationsService().initialize();
